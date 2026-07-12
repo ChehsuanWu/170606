@@ -1,0 +1,142 @@
+// Media monitoring platform data model.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MediaType {
+  NEWSPAPER
+  MAGAZINE
+  TV
+  RADIO
+  ONLINE_NEWS
+  BLOG
+  SOCIAL_MEDIA
+}
+
+enum MatchType {
+  ANY // subscription fires if any keyword in the bundle matches (OR)
+  ALL // subscription fires only if every keyword in the bundle matches (AND)
+}
+
+enum Frequency {
+  INSTANT
+  DAILY
+  WEEKLY
+}
+
+enum EmailStatus {
+  SENT
+  LOGGED
+  FAILED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  savedSearches SavedSearch[]
+
+  @@map("users")
+}
+
+model Source {
+  id        String    @id @default(cuid())
+  name      String
+  mediaType MediaType
+  country   String
+  language  String
+  url       String?
+
+  articles Article[]
+
+  @@index([mediaType])
+  @@index([country])
+  @@map("sources")
+}
+
+model Article {
+  id          String   @id @default(cuid())
+  title       String
+  summary     String
+  content     String
+  url         String
+  language    String
+  places      String[]
+  keywords    String[]
+  publishedAt DateTime
+
+  source   Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  sourceId String
+
+  alerts Alert[]
+
+  @@index([publishedAt])
+  @@index([language])
+  @@index([keywords])
+  @@index([places])
+  @@map("articles")
+}
+
+model SavedSearch {
+  id         String    @id @default(cuid())
+  name       String
+  keywords   String[]
+  matchType  MatchType @default(ANY)
+  places     String[]
+  languages  String[]
+  mediaTypes MediaType[]
+  frequency  Frequency @default(DAILY)
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  lastRunAt  DateTime?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  alerts    Alert[]
+  emailLogs EmailLog[]
+
+  @@index([userId])
+  @@map("saved_searches")
+}
+
+model Alert {
+  id         String    @id @default(cuid())
+  createdAt  DateTime  @default(now())
+  emailedAt  DateTime?
+  readAt     DateTime?
+
+  savedSearch   SavedSearch @relation(fields: [savedSearchId], references: [id], onDelete: Cascade)
+  savedSearchId String
+  article       Article     @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  articleId     String
+
+  @@unique([savedSearchId, articleId])
+  @@index([savedSearchId])
+  @@map("alerts")
+}
+
+model EmailLog {
+  id        String      @id @default(cuid())
+  to        String
+  subject   String
+  body      String
+  status    EmailStatus
+  createdAt DateTime    @default(now())
+
+  savedSearch   SavedSearch? @relation(fields: [savedSearchId], references: [id], onDelete: SetNull)
+  savedSearchId String?
+
+  @@index([createdAt])
+  @@map("email_logs")
+}
